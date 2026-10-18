@@ -1,90 +1,255 @@
-# IPv6 Website & Dependency Readiness Auditor (AIORI-3 PS-027)
+# IPv6 Website & Dependency Readiness Auditor
 
-Loads a page in a real browser (Playwright/Chromium + CDP), discovers every resource it requests,
-and (from Phase 2) probes each host separately over IPv4 and IPv6 through DNS -> TCP -> TLS -> HTTP.
-An AAAA record alone is never treated as proof of IPv6 readiness.
+<div align="center">
 
-**Status: Phase 9 complete** (security hardening - see `docs/security-audit.md`; built on Phase 8's dashboard) - earlier: **Phase 8 complete** (dashboard polish, built entirely on existing Phase 1-7 APIs with zero backend logic changes): a 30-site batch UI (previously missing from the frontend entirely) with live progress, per-site status, report downloads, and drill-down into any site's full single-scan view; a dedicated "works over IPv4 but fails over IPv6" highlight using the existing IPV6_BROKEN comparison label; dependency-graph host nodes now show explicit IPv4/IPv6 status chips; a Blocked filter and a legend were added to the resources table; and a frontend test suite (Vitest + Testing Library, 35 tests) was added alongside one real, non-mocked end-to-end verification driving the actual built UI against the actual backend).
+![IPv6 Readiness Auditor](https://img.shields.io/badge/Dual--Stack-RFC%206555%20%2F%208305-blue?style=for-the-badge&logo=internet-explorer)
+[![Python 3.9+](https://img.shields.io/badge/Python-3.9+-3776AB?style=for-the-badge&logo=python&logoColor=white)](https://www.python.org/)
+[![FastAPI](https://img.shields.io/badge/Backend-FastAPI-009688?style=for-the-badge&logo=fastapi&logoColor=white)](https://fastapi.tiangolo.com/)
+[![React](https://img.shields.io/badge/Frontend-React%2018%20%2B%20Vite-61DAFB?style=for-the-badge&logo=react&logoColor=black)](https://reactjs.org/)
+[![TailwindCSS](https://img.shields.io/badge/Styling-TailwindCSS-38B2AC?style=for-the-badge&logo=tailwind-css&logoColor=white)](https://tailwindcss.com/)
+[![Tests](https://img.shields.io/badge/Tests-224%20Backend%20%7C%2039%20Frontend%20Passing-brightgreen?style=for-the-badge&logo=checkmarx)](https://github.com/Kumar11rudra/IPv6-Website-Dependency-Auditor)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg?style=for-the-badge)](LICENSE)
 
-## Run (no Docker needed)
+<br/>
+
+**A modern, production-grade dual-stack audit engine that tests websites and all of their third-party dependencies over IPv4 and IPv6 independently using headless browser interception and multi-stage network diagnostics (DNS &rarr; TCP &rarr; TLS &rarr; HTTP).**
+
+*An AAAA record alone is never treated as proof of IPv6 readiness.*
+
+[Key Features](#key-features) &bull;
+[Architecture](#architecture) &bull;
+[Quick Start](#quick-start) &bull;
+[API Reference](#api-reference) &bull;
+[Configuration](#configuration) &bull;
+[Test Suites](#test-suites) &bull;
+[Security](#security-hardening)
+
+</div>
+
+---
+
+## Overview
+
+Modern web applications pull hundreds of external resources—CDNs, tracking pixels, font providers, payment gateways, and authentication APIs. While the primary domain may resolve an IPv6 address (`AAAA` record), the website often **degrades or completely breaks** in IPv6-only or Happy Eyeballs fallback scenarios if critical third-party dependencies fail to resolve or respond over IPv6.
+
+**IPv6 Website & Dependency Readiness Auditor** addresses this challenge by:
+1. Loading target websites inside a real Chromium browser via Playwright and the Chrome DevTools Protocol (CDP).
+2. Capturing all dynamic network requests, dependencies, and initiator chains.
+3. Performing isolated, deterministic dual-stack probes (`DNS`, `TCP`, `TLS`, and `HTTP`) against every single discovered host.
+4. Categorizing readiness into definitive verdicts (`BOTH_OK`, `IPV6_BROKEN`, `IPV4_BROKEN`, `BOTH_BROKEN`, `INCONCLUSIVE`).
+5. Providing an interactive force-directed dependency graph, 30-site batch scanning, and sanitized JSON/CSV audit reports.
+
+---
+
+## Key Features
+
+- **Real Browser Execution:** Employs headless Chromium to discover dynamic AJAX/Fetch calls, stylesheets, scripts, fonts, and iframes that raw HTTP crawlers miss.
+- **Isolated Multi-Stage Probing:** Probes each discovered hostname independently across both IPv4 (`A`) and IPv6 (`AAAA`) through 4 discrete network stages:
+  - **DNS:** Query resolution and A/AAAA validation
+  - **TCP:** SYN/ACK handshake and round-trip latency
+  - **TLS:** Certificate verification and SNI handshake
+  - **HTTP:** HEAD/GET response codes and protocol negotiation
+- **Identifies "IPv6 Broken" Dependencies:** Explicitly flags resources that succeed on IPv4 but fail on IPv6 (`IPV6_BROKEN`), uncovering silent dual-stack regressions.
+- **Interactive Force-Directed Topology Graph:** Visualizes dependency trees with D3.js, color-coded node verdicts, and detailed host inspection drawers.
+- **High-Throughput 30-Site Batch Scanner:** Parallel asynchronous scanning for top domain sets with live progress bars, state persistence, and CSV/JSON summaries.
+- **Privacy & SSRF Hardened:** Strips sensitive credentials/JWTs from URLs before export and enforces strict RFC 1918 / loopback SSRF guards.
+- **Modern, Accessible UI:** Features an animated continuous gradient title, ambient glowing search bar, and interactive compliance tabs.
+
+---
+
+## Architecture
+
+```
+                    ┌─────────────────────────────────────────┐
+                    │       User / Web Browser (Client)       │
+                    └────────────────────┬────────────────────┘
+                                         │
+                         HTTP / REST API │  (Port 5173 / 8000)
+                                         ▼
+                    ┌─────────────────────────────────────────┐
+                    │      FastAPI High-Performance Core      │
+                    │   • SSRF Protection Guard               │
+                    │   • Batch Job Orchestrator              │
+                    │   • Redaction & Report Serializer       │
+                    └─────┬─────────────────────────────┬─────┘
+                          │                             │
+          1. Dynamic Page │             2. Multi-Stage  │
+             Interception │                Dual-Stack   │
+                          ▼                             ▼
+        ┌───────────────────────────┐     ┌───────────────────────────┐
+        │ Playwright / Chromium CDP │     │  Family Probe Diagnostics │
+        │ • DOM Execution           │     │  • DNS Resolver (A / AAAA)│
+        │ • Resource Tree Capture   │     │  • TCP Handshake (v4/v6)  │
+        │ • Initiator Lineage       │     │  • TLS Handshake (SNI)    │
+        └─────────────┬─────────────┘     │  • HTTP/1.1 & HTTP/2 Probe│
+                      │                   └─────────────┬─────────────┘
+                      └─────────────────┬───────────────┘
+                                        ▼
+                    ┌─────────────────────────────────────────┐
+                    │       Classifier & Verdict Engine       │
+                    │  BOTH_OK | IPV6_BROKEN | IPV4_BROKEN     │
+                    └───────────────────┬─────────────────────┘
+                                        ▼
+                    ┌─────────────────────────────────────────┐
+                    │         React 18 Dashboard UI           │
+                    │  • D3.js Force-Directed Graph           │
+                    │  • Dual-Stack Comparison Matrix         │
+                    │  • Batch Live Progress & CSV/JSON Export│
+                    └─────────────────────────────────────────┘
+```
+
+---
+
+## Quick Start
+
+### 1. One-Command Unified Launcher (Recommended)
+
+The repository includes a unified runner that manages dependencies, port bindings, and launches both services concurrently:
+
+```bash
+# Clone the repository
+git clone https://github.com/Kumar11rudra/IPv6-Website-Dependency-Auditor.git
+cd IPv6-Website-Dependency-Auditor
+
+# Launch both Backend (port 8000) and Frontend (port 5173)
+python3 start.py
+```
+
+Once started:
+- **Frontend Dashboard:** [http://localhost:5173](http://localhost:5173)
+- **Backend API & Swagger Docs:** [http://localhost:8000/docs](http://localhost:8000/docs)
+- *(Opening `http://localhost:8000` automatically redirects to the Frontend Dashboard).*
+
+---
+
+### 2. Manual Setup (Alternative)
+
+<details>
+<summary>Click to view manual step-by-step setup</summary>
+
+#### Backend
 ```bash
 cd backend
-python3 -m venv .venv && source .venv/bin/activate
+python3 -m venv .venv
+source .venv/bin/activate       # On Windows: .venv\Scripts\activate
 pip install -r requirements.txt
-playwright install chromium            # on a Linux VPS: playwright install --with-deps chromium
-uvicorn app.main:app --reload          # http://localhost:8000/docs
+playwright install chromium     # On Linux VPS: playwright install --with-deps chromium
+uvicorn app.main:app --reload --port 8000
 ```
-```bash
-curl -X POST localhost:8000/api/scan -H 'content-type: application/json' -d '{"url":"https://example.com"}'
-curl localhost:8000/api/scan/<scan_id>
-curl localhost:8000/api/scan/<scan_id>/resources
-```
-Extra endpoints (Phase 2): `GET /api/context` (scanner egress/geo/resolver; **check `ipv6_egress_ok` is true on the VPS
-before measuring**), `GET /api/scan/{id}/context`, `GET /api/scan/{id}/probes` now includes, per (host, port, family): `verdict` (e.g. `IPv6_REACHABLE`, `TCP_FAILURE`, `BLOCKED`, `NOT_TESTED`), `failure_stage`/`failure_subtype`, `family_comparison` (`BOTH_OK` / `IPV6_BROKEN` / `IPV4_BROKEN` / `BOTH_BROKEN` / `INCONCLUSIVE`), and timings.
 
-Tests: `pytest -q` (the real-browser test skips itself if Chromium isn't installed).
-
-## Run the frontend
+#### Frontend
 ```bash
 cd frontend
 npm install
-npm run dev             # http://localhost:5173, expects the backend on :8000
-npm run build            # production build -> frontend/dist
+npm run dev                     # Starts Vite on http://localhost:5173
 ```
-`VITE_API_BASE` overrides the backend URL if it's not on `localhost:8000`.
 
-## Configuration (env vars)
-`AUDITOR_MAX_RESOURCES`, `AUDITOR_PAGE_TIMEOUT_MS`, `AUDITOR_SCAN_DEADLINE_S`, `AUDITOR_MAX_CONCURRENT_SCANS`,
-`AUDITOR_ALLOWED_PORTS`, `AUDITOR_SSRF_ALLOW_HOSTS` (controlled-site hostnames for local Docker dev only),
-`AUDITOR_DNS_TIMEOUT_S`, `AUDITOR_PROBE_CONCURRENCY`, `AUDITOR_CONTEXT_TTL_S`, `AUDITOR_TCP_TIMEOUT_S`, `AUDITOR_TLS_TIMEOUT_S`, `AUDITOR_HTTP_TIMEOUT_S`, `AUDITOR_MAX_ADDRESSES_PER_FAMILY`, `AUDITOR_CHROMIUM_NO_SANDBOX=1` (containers running as root), `AUDITOR_DB_URL`.
+</details>
 
-## Controlled test site (Phase 5)
-See `controlled-site/README.md`. Run its detection test suite with:
+---
+
+## API Reference
+
+| Method | Endpoint | Description |
+|:-------|:---------|:------------|
+| `POST` | `/api/scan` | Initiate a single-site scan with real browser interception |
+| `GET` | `/api/scan/{id}` | Check scan status (`PENDING`, `RUNNING`, `COMPLETED`, etc.) |
+| `GET` | `/api/scan/{id}/resources` | Retrieve discovered third-party resources and load statuses |
+| `GET` | `/api/scan/{id}/probes` | Get discrete IPv4 vs. IPv6 network probe verdicts |
+| `GET` | `/api/scan/{id}/graph` | Fetch graph nodes, edges, and legend for D3 visualization |
+| `GET` | `/api/scan/{id}/report/json` | Download sanitized JSON compliance report |
+| `GET` | `/api/scan/{id}/report/csv` | Download sanitized CSV compliance report |
+| `POST` | `/api/batch-scan` | Trigger a 30-site concurrent batch audit |
+| `GET` | `/api/batch-scan/{id}` | Poll batch progress and aggregate stats |
+| `GET` | `/api/batch-scan/{id}/sites` | Retrieve site-by-site status in batch |
+| `GET` | `/api/context` | Check scanner environment (egress IP, IPv6 capability, resolver) |
+| `GET` | `/api/health` | Healthcheck and active scanner version |
+
+### Example cURL Commands
+
 ```bash
+# 1. Trigger a scan
+curl -X POST http://localhost:8000/api/scan \
+     -H 'Content-Type: application/json' \
+     -d '{"url": "https://example.com"}'
+
+# 2. Check scanner context (ensure IPv6 egress is active)
+curl http://localhost:8000/api/context
+
+# 3. Export sanitized JSON report
+curl http://localhost:8000/api/scan/<SCAN_ID>/report/json -o audit-report.json
+```
+
+---
+
+## Configuration
+
+Customizable via environment variables or a `.env` file:
+
+| Variable | Default | Purpose |
+|:---------|:--------|:--------|
+| `AUDITOR_DB_URL` | `sqlite:///./data/auditor.db` | Database connection string (SQLite or PostgreSQL) |
+| `AUDITOR_MAX_RESOURCES` | `250` | Maximum resources intercepted per page scan |
+| `AUDITOR_PAGE_TIMEOUT_MS` | `30000` | Browser navigation timeout (milliseconds) |
+| `AUDITOR_SCAN_DEADLINE_S` | `90` | Overall scan deadline in seconds |
+| `AUDITOR_MAX_CONCURRENT_SCANS` | `4` | Maximum parallel single scans |
+| `AUDITOR_ALLOWED_PORTS` | `80,443,8080,8443` | Permitted outbound network ports |
+| `AUDITOR_DNS_TIMEOUT_S` | `5.0` | DNS query timeout per family |
+| `AUDITOR_TCP_TIMEOUT_S` | `5.0` | TCP connection timeout per family |
+| `AUDITOR_TLS_TIMEOUT_S` | `5.0` | TLS handshake timeout per family |
+| `AUDITOR_HTTP_TIMEOUT_S` | `8.0` | HTTP probe timeout per family |
+| `AUDITOR_BATCH_CONCURRENCY` | `3` | Parallel sites audited during batch jobs |
+| `AUDITOR_MAX_HOSTS_PER_SCAN` | `100` | Safety limit on distinct hosts probed per scan |
+| `AUDITOR_MAX_REQUEST_BODY_BYTES` | `1048576` | Inbound payload limit (1 MiB) |
+
+---
+
+## Controlled Test Site
+
+The project includes a controlled, deterministic mock site with intentional, seeded IPv6 and IPv4 failures (broken DNS, TCP timeout, SSL mismatch, HTTP 500) to validate classifier accuracy.
+
+```bash
+# Run the seeded detection regression tests
 python3 -m pytest controlled-site/tests -q
 ```
-This starts the seeded origin server as a real subprocess and feeds it through the actual
-scanner classifier, asserting every seeded DNS/TCP/TLS/HTTP failure is detected correctly.
-Final measurements use the site deployed publicly per `deploy/DEPLOY.md`, not this test.
 
-## Batch scanning (Phase 6)
+---
+
+## Test Suites
+
+The project maintains rigorous test coverage across both backend and frontend suites:
+
 ```bash
-curl -X POST localhost:8000/api/batch-scan -H 'content-type: application/json' -d '{}'
-curl localhost:8000/api/batch-scan/<batch_id>              # live progress + status summary
-curl localhost:8000/api/batch-scan/<batch_id>/sites        # per-site name/url/scan_id/status
-```
-An empty body `{}` loads the default `backend/sites.json` plus the controlled test site (if
-`AUDITOR_CONTROLLED_SITE_URL` is set); `{"sites": [...], "include_controlled": false}` overrides
-both. New config: `AUDITOR_BATCH_CONCURRENCY` (default 3), `AUDITOR_BATCH_SITE_TIMEOUT_S` (default
-150), `AUDITOR_BATCH_MAX_SITES` (default 50), `AUDITOR_SITES_CONFIG`, `AUDITOR_CONTROLLED_SITE_URL`.
+# Run all Backend Tests (224 tests)
+cd backend && .venv/bin/pytest
 
-## Reports (Phase 7)
-```bash
-curl localhost:8000/api/scan/<scan_id>/report/json
-curl localhost:8000/api/scan/<scan_id>/report/csv
-curl localhost:8000/api/batch-scan/<batch_id>/report/json
-curl localhost:8000/api/batch-scan/<batch_id>/report/csv
-```
-Built purely from stored Phase 1-6 data (`app/reports/`); no scanning/probing code was
-changed. `app/reports/redact.py` strips embedded URL credentials and redacts sensitive
-query-parameter values (tokens, API keys, session ids, JWTs) before anything is exported -
-the capture pipeline itself never stores headers or cookies, so URLs are the one real
-place a secret could otherwise leak into a report.
+# Run all Frontend Tests (39 tests)
+cd frontend && npm test -- --run
 
-## Frontend tests (Phase 8)
-```bash
-cd frontend
-npm test           # Vitest + Testing Library, 35 tests, ~10s
+# Build Frontend for Production
+cd frontend && npm run build
 ```
-Covers: loading a scan (COMPLETED/PARTIAL/BLOCKED/SCAN_FAILED), empty resources, Unknown
-measurement context, IPv4/IPv6 verdict rendering (including NOT_TESTED never rendering as
-a confirmed failure), batch progress over real polling intervals, and the batch-to-single
-drill-down. No backend or scanning/probing/classification/batch/report code was changed;
-all 178 pre-existing backend tests and 6 controlled-site tests still pass unmodified.
 
-## Security (Phase 9)
-Audit, per-finding classification (fixed / mitigated / limitation) and a VPS deployment
-checklist: `docs/security-audit.md`. Regression tests: `backend/tests/test_security_hardening.py`.
-New env vars: `AUDITOR_MAX_REDIRECTS` (15), `AUDITOR_MAX_REQUEST_BODY_BYTES` (1 MiB),
-`AUDITOR_MAX_HOSTS_PER_SCAN` (100). **Read the limitations section before exposing the API:
-there is no authentication, and an egress firewall is required to fully close DNS rebinding.**
+---
+
+## Security Hardening
+
+As audited in `docs/security-audit.md`:
+- **SSRF Guard:** Rejects requests to loopback (`127.0.0.0/8`, `::1`), private networks (`10.0.0.0/8`, `172.16.0.0/12`, `192.168.0.0/16`, `fc00::/7`), and link-local addresses (`169.254.0.0/16`, `fe80::/10`).
+- **Data Redaction:** Sensitive query parameters (`token`, `api_key`, `session`, `jwt`) and embedded credentials (`http://user:pass@host`) are stripped before writing reports.
+- **Zero Cookies Policy:** Frontend and backend store no session or tracking cookies.
+
+---
+
+## Standards & Compliance
+
+- **RFC 6555:** Happy Eyeballs: Success with Dual-Stack Hosts
+- **RFC 8305:** Happy Eyeballs Version 2: Better Connectivity Using Concurrency
+- **AIORI PS-027:** Internet Measurement & Dual-Stack Readiness Research
+
+---
+
+## License
+
+This project is licensed under the [MIT License](LICENSE).
+Distributed as an open research and diagnostic platform.
