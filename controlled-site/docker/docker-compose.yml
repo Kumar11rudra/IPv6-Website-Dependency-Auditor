@@ -1,0 +1,98 @@
+# Local-development fallback for the controlled test site (Phase 1 decision #2).
+# Final PS-027 measurements use the PUBLIC deployment on the dual-stack VPS
+# (see ../deploy/DEPLOY.md); this compose file is for building/testing the site itself.
+#
+# All seven hostnames share ONE container. seed_server.py listens on that container's
+# v4 address normally, and on its v6 address with the specific failure mode assigned
+# to that hostname - dnsmasq then points each hostname at the address(es) that give it
+# the right DNS shape (dual-stack, or v4-only with no AAAA at all).
+#
+# Requires Docker with IPv6 enabled on the daemon (dockerd --experimental --ipv6, or
+# "ipv6": true in /etc/docker/daemon.json) so containers get a real IPv6 address on
+# the user-defined network below.
+version: "3.8"
+# Phase 9 hardening: each origin container runs as a non-root user (see ../Dockerfile)
+# with all Linux capabilities dropped except the ONE each actually needs
+# (CAP_NET_BIND_SERVICE, to bind ports 80/443 as non-root) - the standard
+# least-privilege pattern for a container that legitimately needs a privileged port
+# without needing full root. The dnsmasq service is a third-party image; its own
+# cap_add: [NET_ADMIN] (which it already needed to manage DNS) is left as-is rather
+# than modifying a pulled image's internals, which is out of this project's scope.
+
+networks:
+  controlled:
+    enable_ipv6: true
+    ipam:
+      config:
+        - subnet: 172.28.0.0/24
+        - subnet: fd00:d0c5::/64
+
+services:
+  dns:
+    image: 4km3/dnsmasq:2.90
+    cap_add: [NET_ADMIN]
+    networks:
+      controlled:
+        ipv4_address: 172.28.0.2
+    volumes:
+      - ./dnsmasq/dnsmasq.conf:/etc/dnsmasq.conf:ro
+    command: ["--no-daemon"]
+
+  origin-pass:
+    build: ..
+    cap_drop: [ALL]
+    cap_add: [NET_BIND_SERVICE]
+    command: >
+      python3 server/seed_server.py --content-dir content
+      --v4-bind 172.28.0.10:80 --v6-bind fd00:d0c5::10:80 --v6-mode pass
+    networks:
+      controlled:
+        ipv4_address: 172.28.0.10
+        ipv6_address: fd00:d0c5::10
+
+  origin-tcp-fail:
+    build: ..
+    cap_drop: [ALL]
+    cap_add: [NET_BIND_SERVICE]
+    command: >
+      python3 server/seed_server.py --content-dir content
+      --v4-bind 172.28.0.11:80 --v6-bind fd00:d0c5::11:80 --v6-mode tcp_fail
+    networks:
+      controlled:
+        ipv4_address: 172.28.0.11
+        ipv6_address: fd00:d0c5::11
+
+  origin-tls-fail:
+    build: ..
+    cap_drop: [ALL]
+    cap_add: [NET_BIND_SERVICE]
+    command: >
+      python3 server/seed_server.py --content-dir content
+      --v4-bind 172.28.0.12:443 --v6-bind fd00:d0c5::12:443 --v6-mode tls_fail
+      --scheme https --cert server/dev.crt --key server/dev.key
+    networks:
+      controlled:
+        ipv4_address: 172.28.0.12
+        ipv6_address: fd00:d0c5::12
+
+  origin-http-fail:
+    build: ..
+    cap_drop: [ALL]
+    cap_add: [NET_BIND_SERVICE]
+    command: >
+      python3 server/seed_server.py --content-dir content
+      --v4-bind 172.28.0.13:443 --v6-bind fd00:d0c5::13:443 --v6-mode http_fail
+      --scheme https --cert server/dev.crt --key server/dev.key
+    networks:
+      controlled:
+        ipv4_address: 172.28.0.13
+        ipv6_address: fd00:d0c5::13
+
+  origin-v4only:
+    build: ..
+    cap_drop: [ALL]
+    cap_add: [NET_BIND_SERVICE]
+    command: python3 server/seed_server.py --content-dir content --v4-bind 172.28.0.14:80
+    networks:
+      controlled:
+        ipv4_address: 172.28.0.14

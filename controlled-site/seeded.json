@@ -1,0 +1,58 @@
+{
+  "site": "controlled-test.example",
+  "description": "Deliberately seeded resources for PS-027 detection testing. Each hostname is a distinct DNS name so that IPv6 behaviour can differ per resource without touching the apex domain.",
+  "resources": [
+    {
+      "hostname": "controlled-test.example",
+      "resource": "/",
+      "type": "document",
+      "dns": "dual-stack",
+      "expected_ipv6_outcome": "IPv6_REACHABLE",
+      "note": "Root document. Both A and AAAA records; IPv6 works end to end."
+    },
+    {
+      "hostname": "static.controlled-test.example",
+      "resource": "/css/style.css, /js/app.js, /images/logo.png",
+      "type": "stylesheet, script, image",
+      "dns": "dual-stack",
+      "expected_ipv6_outcome": "IPv6_REACHABLE",
+      "note": "IPv6-capable CDN host. Everything on it should PASS over both families."
+    },
+    {
+      "hostname": "v4only-img.controlled-test.example",
+      "resource": "/images/photo.png",
+      "type": "image",
+      "dns": "A-only",
+      "expected_ipv6_outcome": "DNS_FAILURE",
+      "expected_failure_stage": "DNS",
+      "note": "No AAAA record at all. The classic 'IPv4-only dependency': the apex may be IPv6-ready but this image is not."
+    },
+    {
+      "hostname": "v6-tcp-fail.controlled-test.example",
+      "resource": "/api/data",
+      "type": "fetch",
+      "dns": "dual-stack",
+      "expected_ipv6_outcome": "TCP_FAILURE",
+      "expected_failure_stage": "TCP",
+      "note": "AAAA record exists and is advertised, but nothing accepts TCP connections on that address/port. Demonstrates that an AAAA record is not proof of reachability."
+    },
+    {
+      "hostname": "v6-tls-fail.controlled-test.example",
+      "resource": "/fonts/font.woff2",
+      "type": "font",
+      "dns": "dual-stack",
+      "expected_ipv6_outcome": "TLS_FAILURE",
+      "expected_failure_stage": "TLS",
+      "note": "TCP connects over IPv6, but the TLS handshake on that path is deliberately broken (server drops the ClientHello)."
+    },
+    {
+      "hostname": "v6-http-fail.controlled-test.example",
+      "resource": "/api/data",
+      "type": "fetch",
+      "dns": "dual-stack",
+      "expected_ipv6_outcome": "HTTP_FAILURE",
+      "expected_failure_stage": "HTTP",
+      "note": "TCP and TLS succeed over IPv6, but the HTTP layer on that path always returns 500."
+    }
+  ]
+}

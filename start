@@ -1,0 +1,8 @@
+#!/usr/bin/env bash
+# A3-PS027-TC039 - Unified Launcher
+DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+if command -v python3 >/dev/null 2>&1; then
+    python3 "$DIR/start.py" "$@"
+else
+    python "$DIR/start.py" "$@"
+fi
