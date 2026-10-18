@@ -9,6 +9,7 @@
 [![TailwindCSS](https://img.shields.io/badge/Styling-TailwindCSS-38B2AC?style=for-the-badge&logo=tailwind-css&logoColor=white)](https://tailwindcss.com/)
 [![Tests](https://img.shields.io/badge/Tests-224%20Backend%20%7C%2039%20Frontend%20Passing-brightgreen?style=for-the-badge&logo=checkmarx)](https://github.com/Kumar11rudra/IPv6-Website-Dependency-Auditor)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg?style=for-the-badge)](LICENSE)
+[![Live Demo](https://img.shields.io/badge/Live%20Demo-GitHub%20Pages-2ea44f?style=for-the-badge&logo=githubpages&logoColor=white)](https://kumar11rudra.github.io/IPv6-Website-Dependency-Auditor/)
 
 <br/>
 
@@ -16,6 +17,7 @@
 
 *An AAAA record alone is never treated as proof of IPv6 readiness.*
 
+[🚀 Live Web App](https://kumar11rudra.github.io/IPv6-Website-Dependency-Auditor/) &bull;
 [Key Features](#key-features) &bull;
 [Architecture](#architecture) &bull;
 [Quick Start](#quick-start) &bull;
