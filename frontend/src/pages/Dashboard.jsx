@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react";
 import { useScanPolling } from "../hooks/useScanPolling";
 import { useBatchPolling } from "../hooks/useBatchPolling";
 import Tabs from "../components/Tabs";
