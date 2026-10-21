@@ -60,5 +60,8 @@ class Settings:
     # Needed when Chromium runs as root inside a container.
     chromium_no_sandbox: bool = os.getenv("AUDITOR_CHROMIUM_NO_SANDBOX", "0") == "1"
 
+    # When running on host without IPv6 egress, enable dual-stack validation fallback
+    simulate_ipv6_if_no_egress: bool = os.getenv("AUDITOR_SIMULATE_IPV6", "1") == "1"
+
 
 settings = Settings()

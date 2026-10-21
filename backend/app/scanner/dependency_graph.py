@@ -54,11 +54,16 @@ def build_graph(resources: list[dict], probes: list[dict]) -> dict:
         "ipv4_verdict": info["ipv4"], "ipv6_verdict": info["ipv6"], "ports": info["ports"],
     } for host, info in sorted(host_summary.items())]
 
+    def clean_label(u: str) -> str:
+        p = u.split("?", 1)[0].split("#", 1)[0]
+        n = p.rstrip("/").split("/")[-1] if "/" in p else p
+        return (n[:22] + "...") if len(n) > 25 else (n or "/")
+
     edges = []
     for r in resources:
         host_node = f"host:{r['hostname']}"
         nodes.append({
-            "id": r["resource_id"], "kind": "resource", "label": r["url"].split("/")[-1] or "/",
+            "id": r["resource_id"], "kind": "resource", "label": clean_label(r["url"]),
             "url": r["url"], "resource_type": r["resource_type"], "hostname": r["hostname"],
             "http_status": r["http_status"], "load_status": r["load_status"],
             "color": host_summary[r["hostname"]]["color"] if r["load_status"] == "LOADED" else GRAY,

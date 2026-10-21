@@ -40,19 +40,21 @@ const TAB_ICONS = {
 
 export default function Tabs({ active, onChange }) {
   return (
-    <div className="flex gap-4 md:gap-7 border-b border-border overflow-x-auto pb-px scrollbar-none">
-      {TABS.map((t) => (
-        <button
-          key={t}
-          onClick={() => onChange(t)}
-          className={`tab-underline inline-flex items-center gap-1.5 ${active === t ? "active text-primary border-primary" : "text-muted"}`}
-        >
-          <span aria-hidden="true" className="shrink-0">
-            {TAB_ICONS[t]}
-          </span>
-          <span>{t}</span>
-        </button>
-      ))}
+    <div className="w-full border-b border-border">
+      <div className="flex justify-start sm:justify-center items-center gap-2 sm:gap-4 md:gap-6 lg:gap-8 overflow-x-auto pb-px scrollbar-none">
+        {TABS.map((t) => (
+          <button
+            key={t}
+            onClick={() => onChange(t)}
+            className={`tab-underline inline-flex items-center gap-1.5 ${active === t ? "active text-primary border-primary" : "text-muted"}`}
+          >
+            <span aria-hidden="true" className="shrink-0">
+              {TAB_ICONS[t]}
+            </span>
+            <span>{t}</span>
+          </button>
+        ))}
+      </div>
     </div>
   );
 }

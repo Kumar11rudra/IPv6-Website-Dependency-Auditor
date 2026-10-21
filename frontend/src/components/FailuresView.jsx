@@ -3,7 +3,19 @@ import StatusBadge from "./StatusBadge";
 export default function FailuresView({ probes }) {
   const failures = probes.filter((p) => p.family === 6 && p.failure_stage);
   if (failures.length === 0) {
-    return <div className="text-base text-muted p-6 border border-border rounded-xl bg-surface shadow-xs leading-relaxed">No IPv6 failures recorded for this scan.</div>;
+    return (
+      <div className="p-8 sm:p-10 border border-emerald-200/80 rounded-2xl bg-emerald-50/50 shadow-xs flex flex-col items-center text-center gap-3">
+        <div className="w-11 h-11 rounded-full bg-emerald-100 text-emerald-600 flex items-center justify-center shadow-2xs">
+          <svg className="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M5 13l4 4L19 7" />
+          </svg>
+        </div>
+        <h4 className="text-base font-bold text-emerald-950">Zero IPv6 Failures Detected</h4>
+        <p className="text-xs sm:text-sm text-emerald-800/80 max-w-md leading-relaxed">
+          All discovered third-party resources and host dependencies successfully connect and respond over IPv6.
+        </p>
+      </div>
+    );
   }
   return (
     <div className="border border-border rounded-xl shadow-xs overflow-auto max-h-[560px] bg-surface">

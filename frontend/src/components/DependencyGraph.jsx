@@ -16,8 +16,7 @@ function familyColor(verdict) {
   return "gray"; // NOT_TESTED, NOT_APPLICABLE, BLOCKED, SCAN_FAILED
 }
 
-/** Simple two-tier layout: host nodes on top, their resources fanned out below.
- * No layout library needed for a hackathon-sized graph (a handful of hosts). */
+/** Clean two-tier grid layout: host nodes on top, resources organized in neat 2-column cards below. */
 function layout(nodes, edges) {
   const hosts = nodes.filter((n) => n.kind === "host");
   const byHost = {};
@@ -25,12 +24,33 @@ function layout(nodes, edges) {
 
   const positioned = [];
   let hx = 0;
-  const HOST_GAP = 260;
+  const COLS = 2;
+  const COL_WIDTH = 150;
+  const ROW_HEIGHT = 80;
+  const HOST_GAP = 90;
+
   for (const h of hosts) {
     const kids = byHost[h.label] || [];
-    positioned.push({ id: h.id, x: hx + Math.max(kids.length - 1, 0) * 60, y: 0, node: h });
-    kids.forEach((k, i) => positioned.push({ id: k.id, x: hx + i * 130, y: 160, node: k }));
-    hx += Math.max(kids.length, 1) * 130 + HOST_GAP;
+    const numCols = kids.length > 0 ? Math.min(kids.length, COLS) : 1;
+    const clusterWidth = Math.max(numCols * COL_WIDTH, 230);
+
+    // Host node centered horizontally above its resources
+    const hostX = hx + (clusterWidth - 220) / 2;
+    positioned.push({ id: h.id, x: Math.max(hostX, hx), y: 0, node: h });
+
+    // Grid layout for resources
+    kids.forEach((k, i) => {
+      const col = i % COLS;
+      const row = Math.floor(i / COLS);
+      positioned.push({
+        id: k.id,
+        x: hx + col * COL_WIDTH,
+        y: 120 + row * ROW_HEIGHT,
+        node: k,
+      });
+    });
+
+    hx += clusterWidth + HOST_GAP;
   }
   return positioned;
 }
@@ -68,21 +88,68 @@ function HostNode({ data }) {
   );
 }
 
-const NODE_TYPES = { host: HostNode };
+function ResourceNode({ data }) {
+  const node = data.raw;
+  return (
+    <div
+      title={node.url}
+      style={{
+        background: COLOR_BG[node.color] || "#fff",
+        border: `2px solid ${COLOR_HEX[node.color] || "#DCE3EA"}`,
+        borderRadius: 6,
+        padding: "8px 10px",
+        width: 140,
+        fontFamily: "IBM Plex Mono, monospace",
+        color: "#101828",
+        cursor: "pointer",
+        boxShadow: "0 1px 3px rgba(0,0,0,0.06)",
+      }}
+    >
+      <Handle type="target" position={Position.Top} style={{ opacity: 0 }} />
+      <div style={{ fontSize: 11, fontWeight: 700, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+        {node.label}
+      </div>
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginTop: 4 }}>
+        <span style={{ fontSize: 9.5, color: "#64748B", textTransform: "uppercase", fontWeight: 600 }}>
+          {node.resource_type}
+        </span>
+        {node.http_status && (
+          <span
+            style={{
+              fontSize: 10,
+              color: node.http_status < 400 ? "#157F3C" : "#B91C1C",
+              fontWeight: 700,
+            }}
+          >
+            {node.http_status}
+          </span>
+        )}
+      </div>
+      <Handle type="source" position={Position.Bottom} style={{ opacity: 0 }} />
+    </div>
+  );
+}
+
+const NODE_TYPES = { host: HostNode, resource: ResourceNode };
 
 function toFlowNode({ id, x, y, node }) {
   if (node.kind === "host") {
-    return { id, position: { x, y }, type: "host", sourcePosition: "bottom", targetPosition: "top",
-            data: { label: node.label, raw: node } };
+    return {
+      id,
+      position: { x, y },
+      type: "host",
+      sourcePosition: "bottom",
+      targetPosition: "top",
+      data: { label: node.label, raw: node },
+    };
   }
   return {
-    id, position: { x, y }, sourcePosition: "bottom", targetPosition: "top",
+    id,
+    position: { x, y },
+    type: "resource",
+    sourcePosition: "bottom",
+    targetPosition: "top",
     data: { label: node.label, raw: node },
-    style: {
-      background: COLOR_BG[node.color] || "#fff", border: `2px solid ${COLOR_HEX[node.color] || "#DCE3EA"}`,
-      borderRadius: 6, padding: 10, fontSize: 12, fontFamily: "IBM Plex Mono, monospace",
-      width: 130, color: "#101828", cursor: "pointer", boxShadow: "0 1px 3px rgba(0,0,0,0.06)",
-    },
   };
 }
 

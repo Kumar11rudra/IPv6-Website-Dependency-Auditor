@@ -1,3 +1,4 @@
+import os
 from contextlib import asynccontextmanager
 
 from fastapi import FastAPI
@@ -16,7 +17,9 @@ async def lifespan(_: FastAPI):
 
 
 app = FastAPI(title="IPv6 Website & Dependency Readiness Auditor", version=settings.scanner_version, lifespan=lifespan)
-app.add_middleware(CORSMiddleware, allow_origins=["http://localhost:5173"], allow_methods=["*"], allow_headers=["*"])
+cors_env = os.getenv("AUDITOR_CORS_ORIGINS", "*")
+allow_origins = [o.strip() for o in cors_env.split(",") if o.strip()]
+app.add_middleware(CORSMiddleware, allow_origins=allow_origins, allow_methods=["*"], allow_headers=["*"])
 app.add_middleware(MaxBodySizeMiddleware, max_bytes=settings.max_request_body_bytes)
 app.include_router(scans.router)
 app.include_router(context.router)
