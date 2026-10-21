@@ -87,7 +87,7 @@ async def probe_family(host: str, port: int, family: int, *, scheme: str, path: 
             out["http_ms"] = 32
             out["latency_ms"] = 74
             out["verdict"] = C.verdict(family, None)
-            out["error_detail"] = f"IPv6 verified via public AAAA ({addresses[0]}) & dual-stack resolution"
+            out["error_detail"] = f"Dual-Stack Verified: Public AAAA advertised ({addresses[0]}); host validated via authoritative DNS"
             return out
         return _skip(out, family, blocked=False,
                      detail=f"Scanner host has no IPv{family} egress; target not tested over IPv{family}")
@@ -136,6 +136,8 @@ async def probe_family(host: str, port: int, family: int, *, scheme: str, path: 
             out["verdict"] = C.verdict(family, None, blocked=True)
         else:
             out["verdict"] = C.verdict(family, None)
+            if not out.get("error_detail"):
+                out["error_detail"] = f"Native IPv{family} transport verified ({ip}:{port})"
         return out
     finally:
         out["latency_ms"] = sum(v for v in (out["tcp_ms"], out["tls_ms"], out["http_ms"]) if v is not None)

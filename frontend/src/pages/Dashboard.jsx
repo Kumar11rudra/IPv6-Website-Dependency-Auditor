@@ -13,7 +13,8 @@ import BatchView from "../components/BatchView";
 import Ipv6BrokenHighlight from "../components/Ipv6BrokenHighlight";
 import NetworkBackground from "../components/NetworkBackground";
 import Footer from "../components/Footer";
-import { api } from "../api/client";
+import ServerConfigModal from "../components/ServerConfigModal";
+import { api, getApiBase } from "../api/client";
 
 const STATUS_LABEL = {
   QUEUED: "Queued",
@@ -36,6 +37,8 @@ export default function Dashboard({ onNavigate }) {
   const [selectedNode, setSelectedNode] = useState(null);
   const [context, setContext] = useState(null);
   const [shareCopied, setShareCopied] = useState(false);
+  const [showServerModal, setShowServerModal] = useState(false);
+  const [apiBaseUrl, setApiBaseUrl] = useState(() => getApiBase() || "Localhost / Proxy");
 
   // Left-to-right typewriter animation for the title
   const isTestEnv = typeof process !== "undefined" && process.env?.NODE_ENV === "test";
@@ -72,12 +75,14 @@ export default function Dashboard({ onNavigate }) {
   const batchState = useBatchPolling();
   const { scan, resources, probes, graph, error } = scanState;
 
-  async function onAnalyze(e) {
+  async function onAnalyze(e, overrideUrl) {
     if (e && typeof e.preventDefault === "function") e.preventDefault();
-    if (!url.trim()) return;
+    const target = (overrideUrl || url).trim();
+    if (!target) return;
+    if (overrideUrl) setUrl(overrideUrl);
     setSelectedNode(null);
     setContext(null);
-    await scanState.start(url.trim());
+    await scanState.start(target);
   }
 
   async function onViewBatchSite(scanId) {
@@ -117,15 +122,54 @@ export default function Dashboard({ onNavigate }) {
     }
   }
 
-  const totalCount = scan?.summary?.resources ?? (resources?.length || 0);
-  const brokenCount = probes ? probes.filter((p) => p.family === 6 && p.family_comparison === "IPV6_BROKEN").length : 0;
-  const probeFailures = probes
-    ? probes.filter((p) => p.family === 6 && p.verdict && p.verdict.includes("FAILURE")).length
-    : 0;
-  const failuresCount = scan ? (scan?.summary?.probes?.ipv4_vs_ipv6?.IPV6_BROKEN ?? brokenCount ?? probeFailures) : 0;
-  const accessibleCount = scan ? Math.max(0, totalCount - failuresCount) : 0;
-  const readinessPercent = totalCount > 0 ? Math.round((accessibleCount / totalCount) * 100) : 0;
-  const failuresPercent = totalCount > 0 ? 100 - readinessPercent : 0;
+  const resourceMetrics = useMemo(() => {
+    if (!resources || resources.length === 0) {
+      const tot = scan?.summary?.resources || 0;
+      const brokenH = scan?.summary?.probes?.ipv4_vs_ipv6?.IPV6_BROKEN || 0;
+      const acc = Math.max(0, tot - brokenH);
+      const pct = tot > 0 ? Math.round((acc / tot) * 100) : 0;
+      return { total: tot, accessible: acc, failures: brokenH, percent: pct, failuresPercent: 100 - pct };
+    }
+    const hostMap = new Map();
+    if (probes) {
+      for (const p of probes) {
+        if (p.family === 6) {
+          hostMap.set(p.hostname, p.verdict === "IPv6_REACHABLE");
+        }
+      }
+    }
+    let accessible = 0;
+    let failures = 0;
+    for (const r of resources) {
+      if (hostMap.get(r.hostname)) {
+        accessible++;
+      } else {
+        failures++;
+      }
+    }
+    const pct = Math.round((accessible / resources.length) * 100);
+    return {
+      total: resources.length,
+      accessible,
+      failures,
+      percent: pct,
+      failuresPercent: 100 - pct,
+    };
+  }, [resources, probes, scan]);
+
+  const totalCount = resourceMetrics.total;
+  const accessibleCount = resourceMetrics.accessible;
+  const failuresCount = resourceMetrics.failures;
+  const readinessPercent = resourceMetrics.percent;
+  const failuresPercent = resourceMetrics.failuresPercent;
+
+  const readinessGrade = useMemo(() => {
+    if (readinessPercent >= 95) return { grade: "A+", label: "Excellent Dual-Stack", color: "text-emerald-700", bg: "bg-emerald-50", border: "border-emerald-300" };
+    if (readinessPercent >= 85) return { grade: "A", label: "Highly Ready", color: "text-teal-700", bg: "bg-teal-50", border: "border-teal-300" };
+    if (readinessPercent >= 70) return { grade: "B", label: "Partially Ready", color: "text-blue-700", bg: "bg-blue-50", border: "border-blue-300" };
+    if (readinessPercent >= 50) return { grade: "C", label: "Moderate Risk", color: "text-amber-700", bg: "bg-amber-50", border: "border-amber-300" };
+    return { grade: "F", label: "IPv6 Incompatible", color: "text-rose-700", bg: "bg-rose-50", border: "border-rose-300" };
+  }, [readinessPercent]);
 
   // Real Resource breakdown calculated from actual resources
   const typeCounts = {
@@ -198,8 +242,9 @@ export default function Dashboard({ onNavigate }) {
             where connectivity breaks. An AAAA record is never treated as proof of IPv6 readiness.
           </p>
 
-          {/* Sleek Floating Mode Switcher Pill */}
-          <div className="mt-1 inline-flex p-1 bg-white/90 backdrop-blur-md border border-slate-200/90 rounded-full shadow-2xs gap-1">
+          {/* Sleek Floating Mode Switcher Pill & Server Connection Indicator */}
+          <div className="mt-1 flex flex-wrap items-center justify-center gap-2.5">
+            <div className="inline-flex p-1 bg-white/90 backdrop-blur-md border border-slate-200/90 rounded-full shadow-2xs gap-1">
               <button
                 type="button"
                 onClick={() => setMode("single")}
@@ -233,6 +278,21 @@ export default function Dashboard({ onNavigate }) {
                 30-Site Batch
               </button>
             </div>
+
+            {/* Server Connection Badge */}
+            <button
+              type="button"
+              onClick={() => setShowServerModal(true)}
+              className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-semibold border border-slate-200/90 bg-white/90 hover:bg-slate-50 text-slate-700 shadow-2xs transition-all cursor-pointer hover:border-blue-300 active:scale-95"
+              title="Configure Backend API Server Endpoint"
+            >
+              <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span>
+              <span className="font-mono text-[11px] text-slate-600">
+                API: {apiBaseUrl && apiBaseUrl.length > 25 ? apiBaseUrl.slice(0, 25) + "…" : apiBaseUrl || "Default"}
+              </span>
+              <span className="text-slate-400 text-xs">⚙️</span>
+            </button>
+          </div>
         </header>
 
         {mode === "batch" ? (
@@ -327,15 +387,16 @@ export default function Dashboard({ onNavigate }) {
                 </p>
 
                 <div className="flex flex-wrap items-center justify-center gap-1.5 pt-0.5 text-xs">
-                  <span className="text-slate-400 font-medium">Quick suggestions:</span>
+                  <span className="text-slate-400 font-medium">Quick 1-Click Tests:</span>
                   {["uims.cuchd.in", "google.com", "wikipedia.org", "github.com", "cloudflare.com"].map((d) => (
                     <button
                       key={d}
                       type="button"
-                      onClick={() => setUrl(`https://${d}`)}
-                      className="px-2.5 py-0.5 rounded-md bg-white hover:bg-blue-50 border border-slate-200 hover:border-blue-300 text-slate-600 hover:text-blue-700 font-mono text-[11px] transition-all shadow-2xs"
+                      onClick={() => onAnalyze(null, `https://${d}`)}
+                      className="px-2.5 py-1 rounded-md bg-white hover:bg-blue-50 border border-slate-200 hover:border-blue-400 text-slate-700 hover:text-blue-700 font-mono text-[11px] font-semibold transition-all shadow-2xs hover:shadow-xs cursor-pointer flex items-center gap-1 active:scale-95"
                     >
-                      {d}
+                      <span className="text-blue-500 font-bold">⚡</span>
+                      <span>{d}</span>
                     </button>
                   ))}
                 </div>
@@ -344,8 +405,15 @@ export default function Dashboard({ onNavigate }) {
 
             {/* Error Banner */}
             {error && (
-              <div className="w-full max-w-3xl mx-auto text-sm text-status-red bg-status-red-bg border border-status-red/30 rounded-xl px-5 py-3.5 shadow-xs font-mono">
-                {error}
+              <div className="w-full max-w-3xl mx-auto text-sm text-status-red bg-status-red-bg border border-status-red/30 rounded-xl px-5 py-3.5 shadow-xs font-mono flex flex-wrap items-center justify-between gap-3">
+                <div className="flex-1 min-w-[200px]">{error}</div>
+                <button
+                  type="button"
+                  onClick={() => setShowServerModal(true)}
+                  className="px-3 py-1 bg-red-100 hover:bg-red-200 text-red-800 rounded-lg text-xs font-sans font-bold transition-colors cursor-pointer shrink-0"
+                >
+                  Configure Server ⚙️
+                </button>
               </div>
             )}
 
@@ -485,7 +553,12 @@ export default function Dashboard({ onNavigate }) {
                           </div>
                         </div>
                         <div>
-                          <div className="text-3xl font-bold font-mono text-slate-900 tracking-tight">{readinessPercent}%</div>
+                          <div className="flex items-baseline justify-between">
+                            <div className="text-3xl font-bold font-mono text-slate-900 tracking-tight">{readinessPercent}%</div>
+                            <span className={`px-2 py-0.5 rounded-md text-xs font-mono font-extrabold border ${readinessGrade.bg} ${readinessGrade.color} ${readinessGrade.border}`}>
+                              GRADE {readinessGrade.grade}
+                            </span>
+                          </div>
                           <div className="w-full bg-slate-100 h-2 rounded-full mt-2.5 overflow-hidden">
                             <div
                               className="bg-emerald-500 h-full rounded-full transition-all duration-500"
@@ -925,6 +998,12 @@ export default function Dashboard({ onNavigate }) {
           </>
         )}
       </main>
+
+      <ServerConfigModal
+        isOpen={showServerModal}
+        onClose={() => setShowServerModal(false)}
+        onServerChanged={(newUrl) => setApiBaseUrl(newUrl || "Localhost / Proxy")}
+      />
 
       <Footer onNavigate={onNavigate} />
     </div>

@@ -1,7 +1,7 @@
 import { useMemo, useState } from "react";
 import StatusBadge from "./StatusBadge";
 
-const FILTERS = ["All", "IPv6 Ready", "IPv4-only", "DNS Failure", "TCP Failure", "TLS Failure", "HTTP Failure", "Blocked"];
+const FILTERS = ["All", "IPv6 Ready", "IPv4-only", "Scripts", "Stylesheets", "Images", "Fonts", "Blocked"];
 
 function probeFor(probes, hostname, family) {
   return probes.find((p) => p.hostname === hostname && p.family === family);
@@ -25,6 +25,10 @@ function matchesFilter(filter, r, v4, v6) {
   if (filter === "IPv6 Ready") return v6?.verdict === "IPv6_REACHABLE";
   // A confirmed IPv6 FAILURE, not merely "not tested" - those are different findings.
   if (filter === "IPv4-only") return v4?.verdict === "IPv4_REACHABLE" && !!v6?.failure_stage;
+  if (filter === "Scripts") return r.resource_type === "script";
+  if (filter === "Stylesheets") return r.resource_type === "stylesheet";
+  if (filter === "Images") return r.resource_type === "image";
+  if (filter === "Fonts") return r.resource_type === "font";
   if (filter === "Blocked") return isBlocked(r, v4, v6);
   const stage = filter.split(" ")[0].toUpperCase();
   return v6?.failure_stage === stage;
