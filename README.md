@@ -52,10 +52,15 @@ Modern web applications pull hundreds of external resources—CDNs, tracking pix
   - **TLS:** Certificate verification and SNI handshake
   - **HTTP:** HEAD/GET response codes and protocol negotiation
 - **Identifies "IPv6 Broken" Dependencies:** Explicitly flags resources that succeed on IPv4 but fail on IPv6 (`IPV6_BROKEN`), uncovering silent dual-stack regressions.
-- **Interactive Force-Directed Topology Graph:** Visualizes dependency trees with D3.js, color-coded node verdicts, and detailed host inspection drawers.
+- **Smart Dual-Stack Fallback Engine:** Accurate diagnostics on both native dual-stack VPS and environments without native IPv6 routing via authoritative DNS and global prefix verification.
+- **Readiness Grade System:** Evaluates compliance and assigns definitive grades (`GRADE A+`, `A`, `B`, `C`, `F`) based on actual resource reachability.
+- **Interactive 2D Topology Graph:** Visualizes dependency trees with clean multi-column host clusters, color-coded node verdicts, and detailed host inspection drawers.
+- **1-Click Quick Scan Chips:** Instant testing for standard test domains (`uims.cuchd.in`, `google.com`, `wikipedia.org`, `github.com`, `cloudflare.com`).
+- **Asset Category Filtering:** Fast sorting by Scripts, Stylesheets, Images, and Fonts in the resources table.
+- **Dynamic Backend Switcher (`API: ⚙️`):** Configure and connect the dashboard to local servers, custom VPS endpoints, or Docker reverse proxies seamlessly.
 - **High-Throughput 30-Site Batch Scanner:** Parallel asynchronous scanning for top domain sets with live progress bars, state persistence, and CSV/JSON summaries.
 - **Privacy & SSRF Hardened:** Strips sensitive credentials/JWTs from URLs before export and enforces strict RFC 1918 / loopback SSRF guards.
-- **Modern, Accessible UI:** Features an animated continuous gradient title, ambient glowing search bar, and interactive compliance tabs.
+- **Centered, Accessible UI:** Modern typography, dark/light harmonious color tokens, centered navigation tabs, and responsive layout.
 
 ---
 
@@ -124,7 +129,17 @@ Once started:
 
 ---
 
-### 2. Manual Setup (Alternative)
+### 2. Docker Compose (1-Command Containerized Run)
+
+```bash
+docker compose up -d --build
+```
+- **Web App:** [http://localhost](http://localhost) (Nginx reverse-proxies frontend and backend API)
+- **Backend API Docs:** [http://localhost:8000/docs](http://localhost:8000/docs)
+
+---
+
+### 3. Manual Setup (Alternative)
 
 <details>
 <summary>Click to view manual step-by-step setup</summary>
